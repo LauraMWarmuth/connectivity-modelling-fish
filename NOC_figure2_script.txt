@@ -1,0 +1,140 @@
+want_yr = 2010%:2014
+ %want_yr = 2006   
+
+close all; 
+clearvars -except want_yr
+
+addpath /noc/users/ekp/NEMO_MATLAB/
+nemo_start 
+rmpath /noc/users/ekp/NEMO_MATLAB/M_MAP/m_map
+addpath /noc/users/sjk1g11/SOLSTICE_matlab/m_map
+
+
+yr = num2str(want_yr)
+
+%% Import trajectories
+%traj_Mad = '/Users/user/Desktop/PhD/Data/NOC/Madagascar_Comoros_France/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Mad = ['/noc/users/sjk1g11/STEPHEN/ABNJ/Madagascar_Comoros_France/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+%traj_Moz = '/Users/user/Desktop/PhD/Data/NOC/Mozambique/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Moz = ['/noc/users/sjk1g11/STEPHEN/ABNJ/Mozambique/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+%traj_Tanz = '/Users/user/Desktop/PhD/Data/NOC/Tanzania/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Tanz = ['/noc/users/sjk1g11/STEPHEN/ABNJ/Tanzania/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+
+tic
+disp('reading Mad')
+lon_Mad = ncread(traj_Mad, 'traj_lon')';
+lat_Mad = ncread(traj_Mad, 'traj_lat')';
+q1 = lat_Mad(1,:);
+q2 = find(q1<100); % remove false starts (if attempted to start on land, = 1e20)
+lon_Mad = lon_Mad(1:101, q2); % only keep 1st 100 days of real particles
+lat_Mad = lat_Mad(1:101, q2);
+toc
+disp('reading Moz')
+lon_Moz = ncread(traj_Moz, 'traj_lon')';
+lat_Moz = ncread(traj_Moz, 'traj_lat')';
+q1 = lat_Moz(1,:);
+q2 = find(q1<100); % remove false starts (if attempted to start on land, = 1e20)
+lon_Moz = lon_Moz(1:101, q2); % only keep 1st 100 days of real particles
+lat_Moz = lat_Moz(1:101, q2);
+toc
+disp('reading Tanz')
+lon_Tanz = ncread(traj_Tanz, 'traj_lon')';
+lat_Tanz = ncread(traj_Tanz, 'traj_lat')';
+q1 = lat_Tanz(1,:);
+q2 = find(q1<100); % remove false starts (if attempted to start on land, = 1e20)
+lon_Tanz = lon_Tanz(1:101, q2); % only keep 1st 100 days of real particles
+lat_Tanz = lat_Tanz(1:101, q2);
+toc
+
+% Separate Comoros form Madagascar:
+siz = size(lat_Mad);
+ComorosS = -13;
+ComorosE = 44.9;
+lat_Com = lat_Mad;
+lon_Com = lon_Mad;
+for q1 = 1:siz(2)
+ if lat_Com(1,q1) < ComorosS
+  lat_Com(1,q1) = NaN;
+ end
+ if lon_Com(1,q1) > ComorosE
+  lat_Com(1,q1) = NaN;      
+ end
+end
+q1 = lat_Com(1,:);
+q2 = find(~isnan(q1));
+q3 = find(isnan(q1));
+lat_Com = lat_Com(:, q2);
+lon_Com = lon_Com(:, q2);
+
+lat_Mad = lat_Mad(:, q3);
+lon_Mad = lon_Mad(:, q3);
+    
+
+
+
+%% Colorbar stufff %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+C = [.5 0 0; 1 0 0; .9 .5 0; .9 .9 0; .5 1 0; 0 .6 .2; 0 .9 .9; 0 0 1; .3 0 .6; .8 0 .8];  % 10 colours, classic rainbow
+colours = 10
+dur = 10
+%C = [.5 0 0; 1 0 0; .9 .5 0; .9 .9 0; .5 1 0; 0 .6 .2; 0 .9 .9; 0 0 1; 0 0 .3; .7 .2 1; .5 0 .5; 1 .5 .7];  % 12 colours, more pinks at blue end
+%C = [.5 0 .3; .7 0 0; 1 0 0; 1 .3 0; .9 .5 0; .9 .9 0; .5 1 0; 0 .6 .2; 0 .9 .9; 0 0 1; .3 0 .6; .8 0 .8];  % 12 colours, more pinks at red end
+
+C_orig = C;
+
+
+
+%% Plotting Spaghetti
+close all
+frac = 50 % impractical to plot all, so only plot every 1/10 (or 1/frac)
+frac2 = 5 % do more for Comoros because small
+lon_rng = [30 80]
+lat_rng = [-30 0]
+figure(1); clf;
+ax = axesm('MapProjection', 'miller', 'MapLonLim', lon_rng, 'MapLatLim', lat_rng); hold on;
+traj_lon = lon_Moz;
+traj_lat = lat_Moz;
+for t = (colours):-1:1;
+plotm(traj_lat(1:t*dur,1:frac:end),traj_lon(1:t*dur,1:frac:end),'-','MarkerSize',1, 'Color', C(t,:)); 
+plotm(traj_lat(1,1:frac:end),traj_lon(1,1:frac:end),'.','MarkerSize',10, 'Color', ([0 0 0])); 
+end
+load coast
+patchm(lat, long, [0.8,0.8,0.7]);
+print('-djpeg','-painters','ALaura_Moz');
+%
+figure(2); clf;
+ax = axesm('MapProjection', 'miller', 'MapLonLim', lon_rng, 'MapLatLim', lat_rng); hold on;
+traj_lon = lon_Tanz;
+traj_lat = lat_Tanz;
+for t = (colours):-1:1;
+plotm(traj_lat(1:t*dur,1:frac:end),traj_lon(1:t*dur,1:frac:end),'-','MarkerSize',1, 'Color', C(t,:)); 
+plotm(traj_lat(1,1:frac:end),traj_lon(1,1:frac:end),'.','MarkerSize',10, 'Color', ([0 0 0])); 
+end
+load coast
+patchm(lat, long, [0.8,0.8,0.7]);
+print('-djpeg','-painters','ALaura_Tanz');
+figure(3); clf;
+ax = axesm('MapProjection', 'miller', 'MapLonLim', lon_rng, 'MapLatLim', lat_rng); hold on;
+traj_lon = lon_Mad;
+traj_lat = lat_Mad;
+for t = (colours):-1:1;
+plotm(traj_lat(1:t*dur,1:frac:end),traj_lon(1:t*dur,1:frac:end),'-','MarkerSize',1, 'Color', C(t,:)); 
+plotm(traj_lat(1,1:frac:end),traj_lon(1,1:frac:end),'.','MarkerSize',10, 'Color', ([0 0 0])); 
+end
+load coast
+patchm(lat, long, [0.8,0.8,0.7]);
+print('-djpeg','-painters','ALaura_Mad');
+figure(4); clf;
+ax = axesm('MapProjection', 'miller', 'MapLonLim', lon_rng, 'MapLatLim', lat_rng); hold on;
+traj_lon = lon_Com;
+traj_lat = lat_Com;
+for t = (colours):-1:1;
+plotm(traj_lat(1:t*dur,1:frac2:end),traj_lon(1:t*dur,1:frac2:end),'-','MarkerSize',1, 'Color', C(t,:)); 
+plotm(traj_lat(1,1:frac2:end),traj_lon(1,1:frac2:end),'.','MarkerSize',10, 'Color', ([0 0 0])); 
+end
+load coast
+patchm(lat, long, [0.8,0.8,0.7]);
+print('-djpeg','-painters','ALaura_Com');
+%}
+
+

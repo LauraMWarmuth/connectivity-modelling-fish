@@ -1,0 +1,339 @@
+for want_yr = 2010:2014
+ %want_yr = 2006   
+
+close all; 
+clearvars -except want_yr
+
+yr = num2str(want_yr)
+
+%% Read in NEMO reef subset
+load('PROCESSED_reefs2_temp.mat');
+S3_old = S3; clear S3
+load('PROCESSED_reefs2b.mat');
+S3_new = S3; clear S3
+
+load('Laura_FishCoords.mat')
+
+%% Import trajectories
+%traj_Kenya = '/Users/user/Desktop/PhD/Data/NOC/Kenya/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Kenya = ['/noc/users/sjk1g11/STEPHEN/ABNJ/ABNJ_Kenya/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+%traj_Mad = '/Users/user/Desktop/PhD/Data/NOC/Madagascar_Comoros_France/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Mad = ['/noc/users/sjk1g11/STEPHEN/ABNJ/Madagascar_Comoros_France/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+%traj_Moz = '/Users/user/Desktop/PhD/Data/NOC/Mozambique/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Moz = ['/noc/users/sjk1g11/STEPHEN/ABNJ/Mozambique/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+%traj_Tanz = '/Users/user/Desktop/PhD/Data/NOC/Tanzania/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Tanz = ['/noc/users/sjk1g11/STEPHEN/ABNJ/Tanzania/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+%traj_Som = '/Users/user/Desktop/PhD/Data/NOC/Somalia/2010/sequent_glob/ariane_trajectories_qualitative.nc';
+traj_Som = ['/noc/users/sjk1g11/STEPHEN/ABNJ/Somalia/',yr,'/sequent_glob/ariane_trajectories_qualitative.nc'];
+
+
+lon_Kenya = ncread(traj_Kenya, 'traj_lon')';
+lat_Kenya = ncread(traj_Kenya, 'traj_lat')';
+lon_Mad = ncread(traj_Mad, 'traj_lon')';
+lat_Mad = ncread(traj_Mad, 'traj_lat')';
+lon_Moz = ncread(traj_Moz, 'traj_lon')';
+lat_Moz = ncread(traj_Moz, 'traj_lat')';
+lon_Tanz = ncread(traj_Tanz, 'traj_lon')';
+lat_Tanz = ncread(traj_Tanz, 'traj_lat')';
+lon_Som = ncread(traj_Som, 'traj_lon')';
+lat_Som = ncread(traj_Som, 'traj_lat')';
+
+lon_ALL = [lon_Kenya, lon_Mad, lon_Moz, lon_Tanz, lon_Som];
+lat_ALL = [lat_Kenya, lat_Mad, lat_Moz, lat_Tanz, lat_Som];
+
+lon_ALL(lon_ALL>90) = NaN;
+lat_ALL(lat_ALL>180) = NaN; % remove the 10^20 missing data
+
+lon0 = lon_ALL(1,:);
+lat0 = lat_ALL(1,:);
+
+particles = 1:10:83592;
+
+lon10 = lon_ALL(1,particles);
+lat10 = lat_ALL(1,particles);
+
+%% Creating 0.25 degree boxes around fish survey sites (+/- 0.25 either side, 0.5.x 05 total box)
+latgap = 0.25;
+longap = 0.25
+
+n_boxes = numel(fishlat);
+
+for i = 1:n_boxes
+ 
+    latbox = [fishlat(i) - latgap, fishlat(i) + latgap];
+    lonbox = [fishlon(i) - longap, fishlon(i) + longap];
+
+    ltbx(i,:) = [latbox(1), latbox(1), latbox(2), latbox(2), latbox(1)];
+    lnbx(i,:) = [lonbox(1), lonbox(2), lonbox(2), lonbox(1), lonbox(1)];
+     
+end
+
+%{
+figure(1); clf; hold on
+for i = 1:n_boxes
+    plot(lnbx(i,:),ltbx(i,:),'k-')
+end
+%}
+
+%% Merge two S3 objects
+% S3_old coordinates until 11659 (no NaNs), S3_new coordinates from 11659 (11660 NaN, 11685 NaN)
+% creates new variable subset (not needed since new struct created below)
+% S3_old_lon = [S3_old(1:100).X];
+
+tic
+S4.name = "combined_S3";
+for i = 1:11659
+    S4(i).X = S3_old(i).X;
+    S4(i).Y = S3_old(i).Y;
+    S4(i).X2 = S3_old(i).X2;
+    S4(i).Y2 = S3_old(i).Y2;
+end
+for i = 11660:18981
+    S4(i).X = S3_new(i).X;
+    S4(i).Y = S3_new(i).Y;
+    S4(i).X2 = S3_new(i).X2;
+    S4(i).Y2 = S3_new(i).Y2;
+end
+toc
+
+
+
+%% Develop a new reef polygon subset based on bounding boxes
+tic
+for i = 1:18981
+    Xmax(i,:) = max(S4(i).X)+longap;
+    Ymax(i,:) = max(S4(i).Y)+latgap;
+    Xmin(i,:) = min(S4(i).X)-longap;
+    Ymin(i,:) = min(S4(i).Y)-longap;
+end
+toc
+
+tic
+for i = 1:18981
+
+
+    S4(i).ltboundingbox = [Ymin(i), Ymin(i), Ymax(i), Ymax(i), Ymin(i)];
+    S4(i).lnboundingbox = [Xmin(i), Xmax(i), Xmax(i), Xmin(i), Xmin(i)];    
+end
+toc
+
+save('AAA_26_8_Laura_S4.mat','-v7.3','S4')
+
+%% Plot starting particles, fish boxes, UNEP reef polygons and
+%{
+for i = 1:100 % this is enough of a test.
+    figure(1); hold on
+    plot(S4(i).lnboundingbox,S4(i).ltboundingbox,'g-')
+end
+%}
+
+%% In polygon to find which particles start in each fishbox
+why
+siz = size(lon_ALL)
+n_particles = siz(2)
+siz2 = size(S4)
+n_polygons = siz2(2)
+why
+%
+tic
+inpg_fish = zeros(n_boxes,n_particles);
+for fbox = 1:n_boxes
+    inpg_fish(fbox,:) = inpolygon(lon_ALL(1,:),lat_ALL(1,:),lnbx(fbox,:),ltbx(fbox,:));
+end
+toc
+
+bob = sum(inpg_fish);
+bob2 = bob; bob2(bob==0)=NaN; bob2=bob2./bob2;
+tot_inpg_fish = nansum(bob2);
+pc_inpg_fish = 100*nansum(bob2)/numel(bob2);
+
+keepstarts = find(bob2==1);
+badstarts = find(bob2~=1);
+LAT_fish = lat_ALL(:,keepstarts);
+LON_fish = lon_ALL(:,keepstarts);
+
+%lat_bad = lat_ALL(:,badstarts); % particles not starting in fish box
+%lon_bad = lon_ALL(:,badstarts);
+
+%save('Laura_fishtraj025LW.mat', '-v7.3','LAT_fish','LON_fish')
+%load('Laura_fishtraj025LW.mat')
+
+
+
+%% Plot UNEP reef polygons and NEMO grid subset and bbox (S4) and fish and reef particles
+%figure(1); clf; hold on
+
+lon30 = LON_fish(2,:);
+lat30 = LAT_fish(2,:);
+
+% plot(lon20b,lat20b,"m.", "MarkerSize", 10)
+%plot(lon20, lat20, ".", "Color", [.7, .4, .1], "MarkerSize", 10)
+%plot(lon30, lat30, ".", "Color", "#D95319", "MarkerSize", 10)
+
+tic
+for i = 1:1000
+lon = S4(i).X;
+lat = S4(i).Y;
+lon2 = S4(i).X2;
+lat2 = S4(i).Y2;
+lon3 = S4(i).lnboundingbox;
+lat3 = S4(i).ltboundingbox;
+
+%plot(lon, lat, "b-")%, "Color", [0, 0.4470, 0.7410])
+%plot(lon2, lat2, "k-")%, "Color", [0.8500, 0.3250, 0.0980])
+%plot(lon3, lat3, "-", "Color", [0.8500, 0.3250, 0.0980])
+
+end
+toc
+
+for i = 1:n_boxes
+    %plot(lnbx(i,:),ltbx(i,:),'k-')
+end
+%plot(lon30,lat30,'g.','MarkerSize',1)
+
+%xlim([41 42])
+%ylim([-11 -10])
+
+%figuren=['/noc/users/steelly/Laura_Start_Particles025'];
+%print('-depsc','-painters',figuren);
+%pngconvert([figuren,'.eps'], 300, 1);  % doesn't work?
+
+
+
+%% now find out which trajectories from LON_fish and LAT_fish are connected to coral reef polygons! - This takes ~hour but finally works!
+
+% THIS is the version of inpg that we want
+%
+
+clear inpg % need to clear object before re-reunning
+tic
+t = 1;
+
+siz = size(LON_fish);
+n_particles = siz(2)
+siz2 = size(S4);
+n_polygons = siz2(2)
+backtrack_days = 31
+
+LON_fish2 = LON_fish(1:backtrack_days,:);
+LAT_fish2 = LAT_fish(1:backtrack_days,:);
+LON_fish2(backtrack_days+1,:) = NaN;
+LAT_fish2(backtrack_days+1,:) = NaN;
+LAT_fish3 = LAT_fish2(:); % make it 1 d with NaNs separating each particle
+LON_fish3 = LON_fish2(:);
+
+
+tic
+inpg = zeros(backtrack_days,n_polygons,n_particles);
+inpg_polyxpoly = zeros(n_polygons, n_particles);
+for t = backtrack_days %1:backtrack_days  % set 1:backtratck days if using inpolygon, just backtrackdays if using polyxpoly
+for pgon = 1:n_polygons
+    
+    %inpg(t,pgon,:) = inpolygon(LON_fish(t,:),LAT_fish(t,:),S4(pgon).lnboundingbox,S4(pgon).ltboundingbox);
+    
+    100*pgon/n_polygons  % this is just a %done counter because it's slow
+    
+    %
+    [q0x, qoy, q0ii] = polyxpoly(LON_fish3, LAT_fish3, S4(pgon).lnboundingbox, S4(pgon).ltboundingbox);
+    bob1 = q0ii(:,1)/(backtrack_days+1); % +1 'cos of the nans. q0ii gives you the kth section where it intersects. Divide by n_particles gives you each traj_n + sume fraction (depending on when it intersected)
+    bob2 = ceil(bob1); % so round up to get the actual traj index
+    inpg_polyxpoly(pgon,bob2) = 1;
+    
+    %{
+    if numel(q0x) == 0
+        inpg_polxpoly(t,pgon,:) = 0;
+    else
+        inpg_polyxpoly(t,pgon,:) = 1;   % this will ALWAYS be 1 in all tsteps if the particle is ever connected to (polygon), always 0 for all tsteps if not
+    end
+    %}
+    clear q0 
+    
+% repeat this with S4.X, S4.Y (for actual reefs), or S4.lnboundingbox, S4.ltboundingbox
+% but also want to redo this with intersect function instead of inpg:
+
+% use this command to do that, https://uk.mathworks.com/help/map/ref/polyxpoly.html
+
+% i played around with a script called "polywannacracker' to see how this
+% fn worked
+
+end
+t
+toc
+end
+inpg = inpg_polyxpoly;
+whos inpg
+%}
+
+%save('inpg_pxp2010.mat','-v7.3','inpg')
+
+%% THE GOOD BIT (hopefully) % can in principle re-rerun with inpg_w1 or inpg_w2 to get a weighted by area connectivity % metric, but not sure how good this will be
+
+% this creates box_indecies, which just tells you which particles to use
+% when you're looking at each box (see paper notes)
+
+%load('inpg_pxp2010.mat') 
+% gives you inpg. This is a 18981 (n_boxes i.e. the reefs) x 9416
+% (n_particles) matrix of whether a particle is connected to a reef in 30
+% days
+
+% find which particles (from LAT_fish and LON_fish) start in each box:
+fish_box_lats = ltbx;
+fish_box_lons = lnbx; % just to give them more sensible names...
+
+n_boxes = numel(fishlat) % fishlat and fishlon are the single point coords of sample sites
+siz = size(LON_fish)
+start_in_boxn = zeros(n_boxes, siz(2));
+for i = 1:n_boxes
+    start_in_boxn(i,:) = inpolygon(LON_fish(1,:),LAT_fish(1,:),fish_box_lons(i,:),fish_box_lats(i,:));
+end
+
+bob = sum(start_in_boxn'); %gives us # of start particles per box
+
+q1 = max(bob)
+
+box_indecies = zeros(n_boxes,q1)+NaN;
+
+for i = 1:n_boxes
+   
+    q2 = start_in_boxn(i,:);
+    q3 = find(q2== 1);
+    for j = 1:numel(q3)
+        box_indecies(i,j) = q3(j); % replace "particles = ':'"    with     "particles = box_indecies(BOX,:)"   where BOX is the box# you care about
+        % box_indecies(i,:) gives you all the trajectory indeces that start
+        % in box i. (and abunch of NaNs)
+    end
+end
+
+%% The best bit:
+
+clear pc_connectivity
+clear raw_connectivity
+
+for i = 1:n_boxes;
+   
+    q1 = box_indecies(i,:);
+    want_starts = q1(~isnan(q1));
+   
+    inpg_box = inpg(:,want_starts); % gives you a n_reef_boxes x n_traj(box) connectivity matrix
+    q2 = max(inpg_box'); % gives you a 18981x1 (n_reef_boxes by 1) array of 1s and 0s. Is fish site "i" connected to each box? 1=y, 0=n
+   
+    pc_connectivity(i) = 100*nansum(q2)/numel(q2)
+    raw_connectivity(i) = nansum(q2);  
+   
+end
+
+figure(1); clf
+bar(pc_connectivity)
+title('30 day conenctivity')
+xlabel('Fish site')
+ylabel('% of reefs connected')
+
+%figure(2); clf
+%bar(raw_connectivity)
+
+
+fname = ['00_Laura_',yr,'.mat'];
+
+save(fname,'-v7.3','inpg','box_indecies','pc_connectivity','raw_connectivity')
+
+end
